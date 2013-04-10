@@ -19,9 +19,9 @@
         height: 600px;
         top: 0;
         left: 0;
-        -webkit-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
-        -moz-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
-        -filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+        -webkit-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(.35);
+        -moz-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(.35);
+        -filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(.35);
       }
       #shadow {
         position: absolute;
@@ -190,7 +190,7 @@
 
           if (typeof map !== "undefined") {
             center = map.getCenter();
-            map.panTo(new google.maps.LatLng(center.lng() + 0.00002, center.lat()));
+            map.panTo(new google.maps.LatLng(center.lat() + 0.00002, center.lng()));
           }
 
           setTimeout(render, 20);
