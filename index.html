@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Defend Earth!</title>
+    <style>
+      body {
+        padding: 0;
+        background: black;
+      }
+      #wrapper {
+        margin: auto;
+        position: relative;
+        width: 800px;
+        height: 600px;
+      }
+      #map_canvas {
+        position: absolute;
+        width: 800px;
+        height: 600px;
+        top: 0;
+        left: 0;
+        -webkit-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+        -moz-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+        -filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+      }
+      #shadow {
+        position: absolute;
+        width: 800px;
+        height: 600px;
+        -webkit-box-shadow: inset 0 0 48px 44px;
+        -moz-box-shadow: inset 0 0 48px 44px;
+        z-index: 999;
+      }
+      .gmnoprint { 
+        display: none;
+      }
+      canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 99;
+      }
+      .instructions {
+        color: #aaa;
+        text-align:center;
+        font-family: sans-serif;
+        character-spacing: 1.5em;
+      }
+      .small {
+        font-size: .7em;
+        color: #444;
+        text-decoration: none;
+      }
+    </style>
+	  <script src="jquery.min.js" type="text/javascript"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script>
+
+      var map;
+
+      $(window).load(function(){
+        var canvas  = document.getElementsByTagName("canvas")[0];
+        var context = canvas.getContext("2d");
+        var width   = canvas.width;
+        var height  = canvas.height;
+        var dx = 0;
+        var dy = 0;
+        var timer = 0, multiplier = 1;
+
+        var sprites = {
+          explosion:  document.getElementById("sprite-explosion"),
+          bullet:     document.getElementById("sprite-bullet"),
+          blockade:   document.getElementById("sprite-blockade"),
+          mothership: document.getElementById("sprite-mothership"),
+          bug:        document.getElementById("sprite-bug"),
+          tri:        document.getElementById("sprite-tri"),
+          player:     document.getElementById("sprite-player"),
+          sat:        document.getElementById("sprite-sat")
+        };
+
+        function Ship (args) {
+          this.x  = typeof(args.x)  == "undefined" ? 0 : args.x;
+          this.y  = typeof(args.y)  == "undefined" ? 0 : args.y;
+          this.dx = typeof(args.dx) == "undefined" ? 0 : args.dx;
+          this.dy = typeof(args.dy) == "undefined" ? 0 : args.dy;
+          this.sprite = typeof(args.sprite) == "undefined" ? sprites.sat : args.sprite;
+          this.w = this.sprite.width;
+          this.h = this.sprite.height;
+          this.health = typeof(args.health) == "undefined" ? 1 : args.health;
+          this.followPlayer = typeof(args.followPlayer) == "undefined" ? false : args.followPlayer;
+        };
+
+        Ship.prototype.render = function() {
+          context.drawImage(this.sprite, 0, 0, this.w, this.h, this.x, this.y, this.w, this.h);
+        };
+
+        function Explosion (args) {
+          this.x  = typeof(args.x)  == "undefined" ? 0 : args.x;
+          this.y  = typeof(args.y)  == "undefined" ? 0 : args.y;
+          this.dx = 0;
+          this.dy = 0;
+          this.sprite = sprites.explosion;
+          this.w = 64;
+          this.h = 64;
+          this.finalWidth = typeof(args.w) == "undefined" ? 64 : args.w;
+          this.finalHeight = typeof(args.h) == "undefined" ? 64 : args.h;
+          this.frame = 0;
+          this.frames = 15;
+          this.cols = 4;
+          this.markForDeletion = false;
+        };
+
+        Explosion.prototype.render = function() {
+          context.drawImage(this.sprite, this.w * (this.frame % this.cols), this.h * Math.floor(this.frame / this.cols), this.w, this.h, this.x, this.y, this.finalWidth, this.finalHeight);
+          if (this.frame < this.frames)
+            this.frame++;
+          else
+            this.markForDeletion = true;
+        };
+
+        function Bullet (args) {
+          this.x  = typeof(args.x)  == "undefined" ? 0 : args.x;
+          this.y  = typeof(args.y)  == "undefined" ? 0 : args.y;
+          this.dx = typeof(args.dx) == "undefined" ? 0 : args.dx;
+          this.dy = typeof(args.dy) == "undefined" ? 0 : args.dy;
+          this.sprite = typeof(args.sprite) == "undefined" ? sprites.bullet : args.sprite;
+          this.w = this.sprite.width;
+          this.h = this.sprite.height;
+        };
+
+        Bullet.prototype.render = function() {
+          context.drawImage(this.sprite, 0, 0, this.w, this.h, this.x, this.y, this.w, this.h);
+        };
+
+        var mothership = new Ship({x:width/2-50,y:100, sprite: sprites.mothership, health: 20});
+
+        var ships  = [
+          new Ship({x:50,y:0,dy:1,      sprite: sprites.sat}),
+          new Ship({x:200,y:50,dy:1,    sprite: sprites.sat}),
+          new Ship({x:530,y:50,dy:1,    sprite: sprites.sat}),
+          new Ship({x:700,y:0,dy:1,     sprite: sprites.sat}),
+          mothership
+        ];
+
+
+        var bullets = [];
+        var explosions = [];
+
+        var player = new Ship({x:width/2,y:400, sprite: sprites.player});
+        var shipShadow = new Image();
+        var center;
+
+        if (typeof(google) != "undefined")
+          var locations = [
+            { center: new google.maps.LatLng(37.679201, -122.408123), label: "San Francisco"},
+            { center: new google.maps.LatLng(41.81537,  12.458925),   label: "Rome"},
+            { center: new google.maps.LatLng(48.842019, 2.350184),    label: "Paris"},
+            { center: new google.maps.LatLng(43.656051, -79.38741),   label: "Toronto" }
+          ];
+          var mapOptions = {
+            zoom: 17,
+            center: locations[Math.round(Math.random() * (locations.length - 1))].center,
+            disableDefaultUI: true,
+            mapTypeId: google.maps.MapTypeId.SATELLITE
+          }
+
+        shipShadow.src = "ships/017-shadow.png";
+
+        render(); 
+        move();
+
+        if (typeof(google) != "undefined")
+          map = new google.maps.Map(document.getElementById('map_canvas'), mapOptions);
+        $("#map_canvas").css("background-color","black");
+
+
+        function render() {
+          context.clearRect(0,0,width,height);
+          for (var i = 0; i < ships.length; i++) {
+            ships[i].render();
+          }
+          for (var i = 0; i < bullets.length; i++) {
+            bullets[i].render();
+          }
+          for (var i = 0; i < explosions.length; i++) {
+            explosions[i].render();
+          }
+          context.drawImage(shipShadow, 0, 0, player.w, player.h, player.x-20, player.y-20, player.w*1.2, player.h*1.2);
+          player.render();
+
+          if (map) {
+            center = map.getCenter();
+            map.panTo(new google.maps.LatLng(center.Ya + 0.00002, center.Za));
+          }
+
+          setTimeout(render, 20);
+        };
+
+        function hitTest (a, b) {
+          if ((a.x + a.w  > b.x) && (a.x < b.x + b.w) &&
+              (a.y + a.h  > b.y) && (a.y < b.y + b.h))
+             return true;
+          else
+             return false;
+        }
+        
+        function move() {
+          player.x += player.dx;
+          player.y += player.dy;
+
+          var length = bullets.length;
+          for (var i = 0; i < length; i++) {
+            for (var j = 0; j < ships.length; j++) {
+              if (hitTest(bullets[i], ships[j])) {
+                ships[j].health--;
+                if (ships[j].health <= 0)
+                  ships[j].markForDeletion = true;
+                bullets[i].x = -900;
+                explosions.push(new Explosion({x:ships[j].x, y: ships[j].y, w: ships[j].w, h: ships[j].w}));
+              }
+            }
+            bullets[i].x += bullets[i].dx;
+            bullets[i].y += bullets[i].dy;
+          }
+
+          var length = ships.length;
+          for (var i = 0; i < length; i++) {
+            if (hitTest(ships[i], player)) {
+              explosions.push(new Explosion({x:ships[i].x, y: ships[i].y, w: ships[i].w, h: ships[i].w}));
+              explosions.push(new Explosion({x:player.x, y: player.y}));
+              ships[i].markForDeletion = true;
+              player.x = -900;
+            }
+
+            if (ships[i].followPlayer) {
+              if (ships[i].x > player.x)
+                ships[i].dx = -.2;
+              if (ships[i].x < player.x)
+                ships[i].dx = .2;
+            }
+
+            ships[i].x += ships[i].dx;
+            ships[i].y += ships[i].dy;
+
+            mothership.x = Math.sin(timer/10) * (width/2) + width/2;
+            mothership.y = Math.sin(timer/10)*100 + 100;
+
+            if (ships[i].y > height || ships[i].markForDeletion ) {
+              ships.splice(i,1);
+              length--;
+            }
+          }
+
+          length = explosions.length;
+          for (var i = 0; i < length; i++) {
+            if (explosions[i].markForDeletion) {
+              explosions.splice(i,1);
+              length--;
+            }
+          }
+
+          timer += 20/1000;
+          
+          if (Math.random() > 0.99/multiplier)
+            ships.push(new Ship({x:Math.random() * width ,y:-100,dy:1,sprite: sprites.sat, followPlayer: true}));
+          if (timer > 10 && Math.random() > 0.9992)
+            ships.push(new Ship({x:0,y:-100,dy:1,dx:1,sprite: sprites.bug, health: 100, followPlayer: true}));
+          if (timer > 100 && timer < 200 && Math.random() > 0.9995) {
+            for (var i = 0; i < 15; i++)
+              ships.push(new Ship({x:Math.random()*width,y:-100,dy:1+Math.random(),dx:0,sprite: sprites.tri, health: 1, followPlayer: true}));
+          }
+          if (timer > 200 && timer < 300 && Math.random() > 0.9995) {
+            ships.push(new Ship({x:0,  y:-100,dy:1,  dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:50, y:-110,dy:1.1,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:100,y:-120,dy:1.2,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:150,y:-130,dy:1.3,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:200,y:-140,dy:1.4,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:250,y:-150,dy:1.5,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:300,y:-160,dy:1.6,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:350,y:-170,dy:1.7,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:400,y:-180,dy:1.8,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:450,y:-190,dy:1.9,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:500,y:-180,dy:1.8,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:550,y:-170,dy:1.7,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:600,y:-160,dy:1.6,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:650,y:-150,dy:1.5,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:700,y:-140,dy:1.4,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:750,y:-130,dy:1.3,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:800,y:-120,dy:1.2,dx:0,sprite: sprites.tri, health: 3}));
+            ships.push(new Ship({x:850,y:-100,dy:1.1,dx:0,sprite: sprites.tri, health: 3}));
+          }
+
+          if (timer > 300 && Math.random() > 0.9995) {
+            for (var i = 0; i < 11; i++)
+              ships.push(new Ship({x:i*70,y:-100,dy:1,dx:0,sprite: sprites.blockade, health: 5}));
+          }
+
+          setTimeout(move, 5);
+        };
+
+        var keys = { left: false, right: false, up: false, down: false };
+
+        $(document).keydown(function(e) {
+          switch(e.keyCode){
+            case 40:
+              player.dy = 1;
+              keys.down = true;
+              break;
+            case 38:
+              player.dy = -1;
+              keys.up = true;
+              break;
+            case 39:
+              player.dx = 1;
+              keys.right = true;
+              break;
+            case 37:
+              player.dx = -1;
+              keys.left = true;
+              break;
+          }
+        });
+
+        $(document).keyup(function(e) {
+          switch(e.keyCode){
+            case 40:
+              if (!keys.up)
+                player.dy = 0;
+              keys.down = false;
+              break;
+            case 38:
+              if (!keys.down)
+                player.dy = 0;
+              keys.up = false;
+              break;
+            case 39:
+              if (!keys.left)
+                player.dx = 0;
+              keys.right = false;
+              break;
+            case 37:
+              if (!keys.right)
+                player.dx = 0;
+              keys.left = false;
+              break;
+            case 32: 
+              bullets.push(new Bullet({x:player.x + player.w/2, y: player.y, dy: -1}));
+          }
+        });
+
+        $(window).blur(function(){
+          player.dx = 0;
+          player.dy = 0;
+        });
+      });
+    </script>
+    <script>
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <canvas width=800, height=600></canvas>
+      <div id="map_canvas"></div>
+      <div id="shadow"></div>
+      <img src="http://i.imgur.com/1IkcB.png" id="sprite-sat">
+      <img src="http://i.imgur.com/3kw71.png" id="sprite-mothership">
+      <img src="http://i.imgur.com/VNzok.png" id="sprite-player">
+      <img src="http://i.imgur.com/vwaMR.png" id="sprite-bug">
+      <img src="http://i.imgur.com/g3zEO.png" id="sprite-tri">
+      <img src="http://i.imgur.com/suiS2.png" id="sprite-blockade">
+      <img src="http://i.imgur.com/fjRLK.png" id="sprite-explosion">
+      <img src="http://i.imgur.com/1kpKN.png" id="sprite-bullet">
+    </div>
+
+    <div class="instructions"><strong>Defend Earth.</strong><br><br>Arrow keys to move, space to fire, reload the page to try again.<br><br><a class="small" href="http://www.gog.com/gamecard/tyrian_2000">Sprites &copy; Tyrian 2000</a></div>
+    
+  </body>
+</html>

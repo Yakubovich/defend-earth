@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Defend Earth!</title>
+    <style>
+      body {
+        padding: 0;
+        background: black;
+      }
+      #wrapper {
+        margin: auto;
+        position: relative;
+        width: 800px;
+        height: 600px;
+      }
+      #map_canvas {
+        position: absolute;
+        width: 800px;
+        height: 600px;
+        top: 0;
+        left: 0;
+        -webkit-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+        -moz-filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+        -filter: contrast(1.3) sepia(0.3) saturate(1.3) brightness(-.25);
+      }
+      #shadow {
+        position: absolute;
+        width: 800px;
+        height: 600px;
+        -webkit-box-shadow: inset 0 0 48px 44px;
+        -moz-box-shadow: inset 0 0 48px 44px;
+        z-index: 999;
+      }
+      .gmnoprint { 
+        display: none;
+      }
+      canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 99;
+      }
+      .instructions {
+        color: #aaa;
+        text-align:center;
+        font-family: sans-serif;
+        character-spacing: 1.5em;
+      }
+      .small {
+        font-size: .7em;
+        color: #444;
+        text-decoration: none;
+      }
+    </style>
+	  <script src="jquery.min.js" type="text/javascript"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script>
+      var map;
+      $(window).load(function(){
+        if (typeof(google) != "undefined")
+          var locations = [
+            { center: new google.maps.LatLng(37.679201, -122.408123), label: "San Francisco"},
+            { center: new google.maps.LatLng(41.81537,  12.458925),   label: "Rome"},
+            { center: new google.maps.LatLng(48.842019, 2.350184),    label: "Paris"},
+            { center: new google.maps.LatLng(43.656051, -79.38741),   label: "Toronto" }
+          ];
+          var mapOptions = {
+            zoom: 17,
+            center: locations[Math.round(Math.random() * (locations.length - 1))].center,
+            disableDefaultUI: true,
+            mapTypeId: google.maps.MapTypeId.SATELLITE
+          }
+
+        if (typeof(google) != "undefined")
+          map = new google.maps.Map(document.getElementById('map_canvas'), mapOptions);
+
+        $("#map_canvas").css("background-color","black");
+
+        if (map) {
+          center = map.getCenter();
+          map.panTo(new google.maps.LatLng(0,0));
+        }
+      });
+    </script>
+    <script>
+    </script>
+  </head>
+  <body>
+    <div id="wrapper">
+      <canvas width=800, height=600></canvas>
+      <div id="map_canvas"></div>
+    </div>
+  </body>
+</html>
