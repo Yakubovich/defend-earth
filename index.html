@@ -169,10 +169,10 @@
         render(); 
         move();
 
-        if (typeof(google) != "undefined")
+        if (typeof(google) !== "undefined")
           map = new google.maps.Map(document.getElementById('map_canvas'), mapOptions);
-        $("#map_canvas").css("background-color","black");
 
+        $("#map_canvas").css("background-color","black");
 
         function render() {
           context.clearRect(0,0,width,height);
@@ -188,9 +188,9 @@
           context.drawImage(shipShadow, 0, 0, player.w, player.h, player.x-20, player.y-20, player.w*1.2, player.h*1.2);
           player.render();
 
-          if (map) {
+          if (typeof map !== "undefined") {
             center = map.getCenter();
-            map.panTo(new google.maps.LatLng(center.Ya + 0.00002, center.Za));
+            map.panTo(new google.maps.LatLng(center.lng() + 0.00002, center.lat()));
           }
 
           setTimeout(render, 20);
